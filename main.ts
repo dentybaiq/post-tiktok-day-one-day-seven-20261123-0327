@@ -17,16 +17,42 @@
 // Run it outside the grader's container with:
 //   mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? "/bot";
 const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+const VIDEO_FILENAME = "VIDEO.json";
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 
-const source = join(BOT_DIR, "VIDEO.json");
-const target = join(OUTPUT_DIR, "VIDEO.json");
+const source = join(BOT_DIR, VIDEO_FILENAME);
+const target = join(OUTPUT_DIR, VIDEO_FILENAME);
+
+// Guard: only hand the gate a well-formed TikTok video link. A bad
+// VIDEO.json (not JSON, no url, or not a /video/<id> address) fails
+// here with a clear message instead of being copied to /output.
+function assertTikTokVideoFile(path: string): void {
+  const videoUrlPattern =
+    /^https:\/\/(www\.|m\.)?tiktok\.com\/@[^/]+\/video\/\d+$/;
+
+  let videoUrl: unknown;
+  try {
+    videoUrl = JSON.parse(readFileSync(path, "utf8")).url;
+  } catch (error) {
+    console.error(`VIDEO.json at ${path} is not valid JSON:`, error);
+    process.exit(1);
+  }
+
+  if (typeof videoUrl !== "string" || !videoUrlPattern.test(videoUrl)) {
+    console.error(
+      `VIDEO.json at ${path} does not name a TikTok video URL (https://www.tiktok.com/@<handle>/video/<id>).`,
+    );
+    process.exit(1);
+  }
+}
+
+assertTikTokVideoFile(source);
 
 try {
   copyFileSync(source, target);
